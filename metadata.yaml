@@ -1,5 +1,5 @@
 homepage: "https://clerk.io"
 documentation: "https://github.com/newnorthdigital/clerkio-web-tag/blob/main/README.md"
 versions:
-  - sha: REPLACE_WITH_COMMIT_SHA
+  - sha: aa0d90bdd10a62ca4afed54ec22a1cc487ce52e6
     changeNotes: "Initial release."
