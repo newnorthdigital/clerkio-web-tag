@@ -1,5 +1,7 @@
 homepage: "https://clerk.io"
 documentation: "https://github.com/newnorthdigital/clerkio-web-tag/blob/main/README.md"
 versions:
+  - sha: 8e8cc01b7f5d00e3aa9c6a7cdb0b9b78711c5c8a
+    changeNotes: "Add UTF-8 BOM to template.tpl."
   - sha: aa0d90bdd10a62ca4afed54ec22a1cc487ce52e6
-    changeNotes: "Initial release."
+    changeNotes: "Initial release - Clerk.io search and recommendations."
