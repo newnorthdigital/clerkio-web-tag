@@ -1,6 +1,8 @@
 homepage: "https://clerk.io"
 documentation: "https://github.com/newnorthdigital/clerkio-web-tag/blob/main/README.md"
 versions:
+  - sha: b9b0ecc73193708d26cb711680a53c5e81be791c
+    changeNotes: "Rename displayName to 'Clerk.io Tracking by New North Digital' per Gallery third-party naming rule (tag name by company)."
   - sha: 8e8cc01b7f5d00e3aa9c6a7cdb0b9b78711c5c8a
     changeNotes: "Add UTF-8 BOM to template.tpl."
   - sha: aa0d90bdd10a62ca4afed54ec22a1cc487ce52e6
