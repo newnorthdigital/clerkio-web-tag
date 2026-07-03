@@ -221,6 +221,33 @@ ___TEMPLATE_PARAMETERS___
   },
   {
     "type": "GROUP",
+    "name": "consentGroup",
+    "displayName": "Consent",
+    "groupStyle": "ZIPPY_OPEN",
+    "subParams": [
+      {
+        "type": "SELECT",
+        "name": "consentMode",
+        "displayName": "Consent handling",
+        "macrosInSelect": false,
+        "selectItems": [
+          {
+            "value": "auto",
+            "displayValue": "Follow GTM Consent Mode (analytics_storage)"
+          },
+          {
+            "value": "off",
+            "displayValue": "Fire immediately (I gate consent elsewhere)"
+          }
+        ],
+        "simpleValueType": true,
+        "defaultValue": "auto",
+        "help": "\"Follow GTM Consent Mode\" (recommended) fires only once analytics_storage is granted, and waits for consent if it is not yet given. \"Fire immediately\" runs right away, for when you gate consent with GTM's tag-level consent settings or a consent trigger. Consent that is never configured counts as granted, so sites without Consent Mode are unaffected."
+      }
+    ]
+  },
+  {
+    "type": "GROUP",
     "name": "debug",
     "displayName": "Debugging",
     "groupStyle": "ZIPPY_CLOSED",
@@ -248,6 +275,8 @@ const makeString = require('makeString');
 const makeNumber = require('makeNumber');
 const getType = require('getType');
 const JSON = require('JSON');
+const isConsentGranted = require('isConsentGranted');
+const addConsentListener = require('addConsentListener');
 
 const actionType = data.actionType;
 const enableDebug = data.enableDebug;
@@ -265,10 +294,40 @@ debugLog('Starting with action type: ' + actionType);
 // createArgumentsQueue maps exactly to this pattern.
 const clerkPush = createArgumentsQueue('Clerk', '__clerk_q');
 
-if (actionType === 'init') {
-  handleInit();
+// Run the tag. Guarded so it runs at most once, even if the consent listener
+// fires more than once.
+let hasFired = false;
+function fire() {
+  if (hasFired) {
+    return;
+  }
+  hasFired = true;
+
+  if (actionType === 'init') {
+    handleInit();
+  } else {
+    handleAction();
+  }
+}
+
+// Consent gate. Clerk.io stores identifiers and reads behaviour for its
+// recommendation engine, which requires analytics_storage. In the default
+// "auto" mode the tag follows GTM Consent Mode: it fires once analytics_storage
+// is granted and waits (via a consent listener) if it is not yet. Choose "Fire
+// immediately" to gate consent at the container level instead. Note:
+// isConsentGranted returns true when consent is not configured, so sites
+// without Consent Mode keep firing.
+const consentMode = data.consentMode || 'auto';
+
+if (consentMode === 'off' || isConsentGranted('analytics_storage')) {
+  fire();
 } else {
-  handleAction();
+  debugLog('Waiting for analytics_storage consent');
+  addConsentListener('analytics_storage', function(consentType, granted) {
+    if (granted) {
+      fire();
+    }
+  });
 }
 
 function handleInit() {
@@ -568,6 +627,58 @@ ___WEB_PERMISSIONS___
       "isEditedByUser": true
     },
     "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "access_consent"
+      },
+      "param": [
+        {
+          "key": "consentTypes",
+          "value": {
+            "type": 2,
+            "listItem": [
+              {
+                "type": 3,
+                "mapKey": [
+                  {
+                    "type": 1,
+                    "string": "consentType"
+                  },
+                  {
+                    "type": 1,
+                    "string": "read"
+                  },
+                  {
+                    "type": 1,
+                    "string": "write"
+                  }
+                ],
+                "mapValue": [
+                  {
+                    "type": 1,
+                    "string": "analytics_storage"
+                  },
+                  {
+                    "type": 8,
+                    "boolean": true
+                  },
+                  {
+                    "type": 8,
+                    "boolean": false
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "clientAnnotations": {
+      "isEditedByUser": true
+    },
+    "isRequired": true
   }
 ]
 
@@ -580,6 +691,7 @@ scenarios:
     const mockData = {
       actionType: 'init',
       apiKey: 'test-api-key-abc123',
+      consentMode: 'off',
       enableDebug: false
     };
 
@@ -595,6 +707,7 @@ scenarios:
 - name: "Init - fails without API key"
   code: |-
     const mockData = {
+      consentMode: 'off',
       actionType: 'init',
       apiKey: '',
       enableDebug: false
@@ -613,6 +726,7 @@ scenarios:
     const mockData = {
       actionType: 'productView',
       productId: '12345',
+      consentMode: 'off',
       enableDebug: false
     };
 
@@ -625,6 +739,7 @@ scenarios:
     const mockData = {
       actionType: 'cart',
       cartProductIds: [111, 222, 333],
+      consentMode: 'off',
       enableDebug: false
     };
 
@@ -639,6 +754,7 @@ scenarios:
       orderId: 'ORD-9876',
       saleProductIds: [111, 222],
       customerEmail: 'test@example.com',
+      consentMode: 'off',
       enableDebug: false
     };
 
@@ -649,6 +765,7 @@ scenarios:
 - name: "Sale - fails without order ID"
   code: |-
     const mockData = {
+      consentMode: 'off',
       actionType: 'sale',
       orderId: '',
       saleProductIds: [111],
@@ -664,6 +781,7 @@ scenarios:
     const mockData = {
       actionType: 'search',
       searchQuery: 'blue sneakers',
+      consentMode: 'off',
       enableDebug: false
     };
 
@@ -676,6 +794,7 @@ scenarios:
     const mockData = {
       actionType: 'init',
       apiKey: 'test-api-key-abc123',
+      consentMode: 'off',
       enableDebug: false
     };
 
@@ -686,6 +805,90 @@ scenarios:
     runCode(mockData);
 
     assertApi('gtmOnFailure').wasCalled();
+
+- name: "Consent - auto mode fires when analytics_storage is already granted"
+  code: |-
+    const mockData = {
+      actionType: 'init',
+      apiKey: 'test-api-key-abc123',
+      consentMode: 'auto',
+      enableDebug: false
+    };
+
+    mock('isConsentGranted', function(type) { return true; });
+    mock('injectScript', function(url, onSuccess, onFailure, cacheToken) {
+      onSuccess();
+    });
+
+    runCode(mockData);
+
+    assertApi('injectScript').wasCalled();
+    assertApi('addConsentListener').wasNotCalled();
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: "Consent - auto mode waits when analytics_storage is denied"
+  code: |-
+    const mockData = {
+      actionType: 'init',
+      apiKey: 'test-api-key-abc123',
+      consentMode: 'auto',
+      enableDebug: false
+    };
+
+    mock('isConsentGranted', function(type) { return false; });
+    mock('addConsentListener', function(type, callback) {});
+    mock('injectScript', function(url, onSuccess, onFailure, cacheToken) {
+      onSuccess();
+    });
+
+    runCode(mockData);
+
+    assertApi('addConsentListener').wasCalled();
+    assertApi('injectScript').wasNotCalled();
+
+- name: "Consent - fires once after analytics_storage is granted via the listener"
+  code: |-
+    const mockData = {
+      actionType: 'init',
+      apiKey: 'test-api-key-abc123',
+      consentMode: 'auto',
+      enableDebug: false
+    };
+
+    mock('isConsentGranted', function(type) { return false; });
+    mock('addConsentListener', function(type, callback) {
+      callback(type, true);
+    });
+    let injectCount = 0;
+    mock('injectScript', function(url, onSuccess, onFailure, cacheToken) {
+      injectCount++;
+      onSuccess();
+    });
+
+    runCode(mockData);
+
+    assertThat(injectCount).isEqualTo(1);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: "Consent - fire immediately skips the consent check"
+  code: |-
+    const mockData = {
+      actionType: 'init',
+      apiKey: 'test-api-key-abc123',
+      consentMode: 'off',
+      enableDebug: false
+    };
+
+    mock('isConsentGranted', function(type) { return false; });
+    mock('injectScript', function(url, onSuccess, onFailure, cacheToken) {
+      onSuccess();
+    });
+
+    runCode(mockData);
+
+    assertApi('injectScript').wasCalled();
+    assertApi('addConsentListener').wasNotCalled();
+    assertApi('gtmOnSuccess').wasCalled();
 
 
 ___NOTES___

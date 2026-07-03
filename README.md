@@ -9,6 +9,7 @@ A Google Tag Manager web tag template for [Clerk.io](https://clerk.io), the AI-p
 - **Track Cart** - Sync the current cart contents with Clerk.io
 - **Track Purchases/Sales** - Log completed orders to Clerk.io for training its recommendation engine
 - **Track Search** - Send search queries to Clerk.io
+- **Built-in Consent Mode gate** - follows GTM Consent Mode by default, firing only once `analytics_storage` is granted and waiting for consent otherwise
 
 ## Installation
 
@@ -86,6 +87,13 @@ Create a tag with action type **Track Search**:
 
 **Trigger:** Search results page view.
 
+## Consent
+
+The tag has a built-in Consent Mode gate, set by the **Consent handling** field:
+
+- **Follow GTM Consent Mode (analytics_storage)** _(default, recommended)_ - the tag fires only once `analytics_storage` is granted, and waits for consent (via a consent listener) if it is not yet given. Consent that is never configured counts as granted, so sites without Consent Mode are unaffected.
+- **Fire immediately (I gate consent elsewhere)** - the tag runs right away, for when you gate consent with GTM's tag-level consent settings or a consent trigger.
+
 ## Field Reference
 
 | Field | Action | Required | Description |
@@ -100,6 +108,7 @@ Create a tag with action type **Track Search**:
 | Product IDs | Sale | Yes | Array of product IDs in the order |
 | Customer email | Sale | No | Customer email for attribution |
 | Search query | Search | Yes | The visitor's search term |
+| Consent handling | All | No | Follow GTM Consent Mode for `analytics_storage` (default) or fire immediately |
 
 ## Permissions
 
@@ -109,6 +118,7 @@ This template requires the following GTM sandbox permissions:
 |---|---|
 | Inject Script | Loads `https://cdn.clerk.io/clerk.js` |
 | Access Globals | Reads/writes `Clerk` and `__clerk_q` on the window object |
+| Access Consent | Reads `analytics_storage` consent state for the Consent Mode gate |
 | Logging | Debug logging to the browser console |
 
 ## Resources
